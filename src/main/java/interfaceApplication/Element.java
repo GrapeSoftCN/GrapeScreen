@@ -6,6 +6,7 @@ import org.bson.types.ObjectId;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
+import JGrapeSystem.rMsg;
 import interfaceModel.GrapeTreeDBModel;
 import model.Model;
 import nlogger.nlogger;
@@ -40,9 +41,9 @@ public class Element {
 	 */
 	private HashMap<String, Object> getInitData() {
 		HashMap<String, Object> defmap = model.AddFixField();
-		// 设置screen表独有的字段
 		defmap.put("bid", "0"); // 所属用户id
 		defmap.put("content", ""); // 元素内容，jsonarray形式，[{"type":"","content":""}]
+		defmap.put("timediff", "5"); // 元素切换间隔
 		return defmap;
 	}
 
@@ -62,7 +63,13 @@ public class Element {
 		Object info = "";
 		String content;
 		JSONObject obj = model.AddMap(getInitData(), ElementInfo);
-		if (obj != null && obj.size() != 0 && obj.containsKey("content")) {
+		if (obj == null || obj.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
+		}
+		if (obj != null && obj.size() != 0) {
+			if (!obj.containsKey("content")) {
+				return rMsg.netMSG(3, "元素内容为空");
+			}
 			content = obj.getString("content");
 			content = codec.DecodeHtmlTag(content);
 			content = codec.decodebase64(content);
@@ -95,8 +102,14 @@ public class Element {
 		String cont;
 		String tid = theme.getTidByeid(id);
 		JSONObject object = new JSONObject();
-		int code = 0;
+		int code = 99;
 		JSONObject obj = JSONObject.toJSON(ElementInfo);
+		if (id == null || id.equals("") || id.equals("null")) {
+			return rMsg.netMSG(4, "无效元素id");
+		}
+		if (obj == null || obj.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
+		}
 		if (obj != null && obj.size() != 0) {
 			if (obj.containsKey("content")) {
 				cont = obj.getString("content");
@@ -113,7 +126,6 @@ public class Element {
 					object.put("content", content);
 					broadManage.broadEvent(tid, 1, object.toString());
 				}
-
 			}
 		}
 		return model.resultMessage(code, "修改成功");
@@ -154,6 +166,9 @@ public class Element {
 	 */
 	public String DeleteElement(String ids) {
 		long tipcode = 0;
+		if (ids == null || ids.equals("") || ids.equals("null")) {
+			return rMsg.netMSG(4, "无效元素id");
+		}
 		String[] value = ids.split(",");
 		int l = value.length;
 		gDbModel.or();
@@ -181,17 +196,19 @@ public class Element {
 		JSONArray array = null;
 		long total = 0, totalSize = 0;
 		JSONArray condArray = JSONArray.toJSONArray(condString);
-		if (condArray != null && condArray.size() != 0) {
-			gDbModel.where(condArray);
-		}
-		if (sid != null && sid.equals("")) {
-			if (!model.isAdmin()) {
-				gDbModel.eq("userid", userid);
+		if (idx >0 && PageSize > 0) {
+			if (condArray != null && condArray.size() != 0) {
+				gDbModel.where(condArray);
 			}
-			array = gDbModel.mask("itemfatherID,itemSort,deleteable,visable,itemLevel,mMode,uMode,dMode").dirty()
-					.page(idx, PageSize);
-			total = gDbModel.dirty().count();
-			totalSize = gDbModel.pageMax(PageSize);
+			if (sid != null && sid.equals("")) {
+				if (!model.isAdmin()) {
+					gDbModel.eq("userid", userid);
+				}
+				array = gDbModel.mask("itemfatherID,itemSort,deleteable,visable,itemLevel,mMode,uMode,dMode").dirty()
+						.page(idx, PageSize);
+				total = gDbModel.dirty().count();
+				totalSize = gDbModel.pageMax(PageSize);
+			}
 		}
 		return model.pageShow(array, total, totalSize, idx, PageSize);
 	}
@@ -249,19 +266,35 @@ public class Element {
 	@SuppressWarnings("unchecked")
 	public JSONObject GetElementInfo(String ids) {
 		JSONObject tempObj, obj = new JSONObject();
-		String id;
-		int l = 0;
+		String id, temp="5";
+		int l = 0,timediff = 5;
 		JSONArray array = BatchElement(ids);
 		JSONArray contentobj = new JSONArray();
 		array = getBlocks(array);
+		JSONObject object = null;
 		if (array != null && array.size() != 0) {
 			l = array.size();
 			for (int i = 0; i < l; i++) {
+				object = new JSONObject();
 				tempObj = (JSONObject) array.get(i);
 				id = tempObj.getMongoID("_id");
 				contentobj = JSONArray.toJSONArray(tempObj.get("content").toString());
-				tempObj.put("content", (contentobj != null && contentobj.size() != 0) ? contentobj : new JSONArray());
-				obj.put(id, tempObj);
+				object.put("content", (contentobj != null && contentobj.size() != 0) ? contentobj : new JSONArray());
+				object.put("area", tempObj.getString("area"));
+				object.put("areaid", tempObj.getString("areaid"));
+				object.put("bid", tempObj.getString("bid"));
+				object.put("_id", tempObj.getJson("_id"));
+				if (object.containsKey("timediff")) {
+					temp = tempObj.getString("timediff");
+					if (temp.contains("$numberLong")) {
+						temp = JSONObject.toJSON(temp).getString("$numberLong");
+					}
+					if (temp!=null && !temp.equals("") && !temp.equals("")) {
+						timediff = Integer.parseInt(temp);
+					}
+				}
+				object.put("timediff", Integer.parseInt(temp));
+				obj.put(id, object);
 			}
 		}
 		return obj;
@@ -284,6 +317,7 @@ public class Element {
 		}
 		return obj;
 	}
+
 	/**
 	 * 获取区域信息,添加至元素信息中
 	 * 
@@ -337,7 +371,7 @@ public class Element {
 	@SuppressWarnings("unchecked")
 	private JSONObject FillBlock(JSONObject ModeInfo, JSONObject BlockInfo) {
 		// JSONArray tempArray = new JSONArray();
-		String id,area = "",areaid = "";
+		String id, area = "", areaid = "";
 		if ((ModeInfo != null) && (ModeInfo.size() != 0)) {
 			String bid = ModeInfo.getString("bid");
 			String[] value = bid.split(",");
@@ -353,7 +387,7 @@ public class Element {
 			ModeInfo.put("area", area);
 			ModeInfo.put("areaid", areaid);
 			// ModeInfo.remove("bid");
-//			 ModeInfo.put("area", tempArray);
+			// ModeInfo.put("area", tempArray);
 		}
 		return ModeInfo;
 	}
@@ -397,11 +431,11 @@ public class Element {
 			String[] value = ids.split(",");
 			if (value.length > 0) {
 				for (String id : value) {
-					if (ObjectId.isValid(id)) {
-						gDbModel.eq("_id", id);
-					}
+					gDbModel.eq("_id", id);
 				}
-				array = gDbModel.mask("itemfatherID,itemSort,deleteable,visable,itemLevel,mMode,uMode,dMode").select();
+				array = gDbModel.field("_id,bid,content,timediff").select();
+				// array =
+				// gDbModel.mask("itemfatherID,itemSort,deleteable,visable,itemLevel,mMode,uMode,dMode").select();
 			}
 		}
 		return array;
@@ -469,7 +503,7 @@ public class Element {
 	public JSONObject FillElement(JSONObject ThemeInfo, JSONObject ElementInfo) {
 		JSONObject tempObj;
 		JSONArray tempArray = new JSONArray(), contentArray;
-		String bid;
+		String bid,temp = "5";
 		String[] value;
 		if (ThemeInfo != null && ThemeInfo.size() != 0) {
 			bid = ThemeInfo.getString("content");
@@ -479,6 +513,11 @@ public class Element {
 				if (tempObj != null && tempObj.size() != 0) {
 					contentArray = JSONArray.toJSONArray(tempObj.getString("content"));
 					tempObj.put("content", contentArray);
+					temp = tempObj.getString("timediff");
+					if (temp.contains("$numberLong")) {
+						temp = JSONObject.toJSON(temp).getString("$numberLong");
+					}
+					tempObj.put("timediff", Integer.parseInt(temp));
 					tempArray.add(tempObj);
 				}
 			}

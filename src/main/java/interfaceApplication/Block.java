@@ -7,6 +7,7 @@ import java.util.List;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
+import JGrapeSystem.rMsg;
 import check.formHelper;
 import check.tableField;
 import check.formHelper.formdef;
@@ -29,17 +30,13 @@ public class Block {
 	 * 
 	 * @return
 	 */
-	private GrapeTreeDBModel setCheckData() {
-		formHelper form = new formHelper();
-		tableField field = new tableField("area", "");
-		field.putRule(formdef.notNull, "");
-		form.addField(field);
-		field = new tableField("mid", "1");
-		field.putRule(formdef.notNull, "100");
-		form.addField(field);
-		gDbModel.setCheckModel(form);
-		return gDbModel;
-	}
+	/*
+	 * private GrapeTreeDBModel setCheckData() { formHelper form = new
+	 * formHelper(); tableField field = new tableField("area", "");
+	 * field.putRule(formdef.notNull, ""); form.addField(field); field = new
+	 * tableField("mid", "1"); field.putRule(formdef.notNull, "100");
+	 * form.addField(field); gDbModel.setCheckModel(form); return gDbModel; }
+	 */
 
 	/**
 	 * 添加默认值
@@ -68,15 +65,10 @@ public class Block {
 	public String AddBlock(String BlockInfo) {
 		Object info = "";
 		JSONObject object = model.AddMap(getInitData(), BlockInfo);
-		if (object == null) {
-			return model.resultmsg(99);
+		if (object == null || object.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
 		}
-		setCheckData();
-		gDbModel.checkMode();
 		info = gDbModel.dataEx(object).insertEx();
-		if (info == null) {
-			return model.resultmsg(1);
-		}
 		object = gDbModel.eq("_id", info).find();
 		return model.resultJSONInfo(object);
 	}
@@ -93,13 +85,16 @@ public class Block {
 	 *
 	 */
 	public String AddAllBlock(String BlockInfo) {
-		String info="";
+		String info = "";
 		List<Object> list = new ArrayList<Object>();
 		JSONArray Condarray = JSONArray.toJSONArray(BlockInfo);
 		JSONObject obj;
-		if (Condarray != null && Condarray.size() != 0) {
+		if (Condarray == null || Condarray.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
+		}
+		if (Condarray != null && Condarray.size() > 0) {
 			for (Object object : Condarray) {
-				obj = (JSONObject)object;
+				obj = (JSONObject) object;
 				info = gDbModel.data(obj).insertOnce().toString();
 				list.add(info);
 			}
@@ -124,18 +119,26 @@ public class Block {
 	public String UpdateBlock(String id, String BlockInfo) {
 		int code = 99;
 		JSONObject obj = JSONObject.toJSON(BlockInfo);
+		if (id == null || id.equals("") || id.equals("null")) {
+			return rMsg.netMSG(3, "无效区域id");
+		}
+		if (obj == null || obj.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
+		}
+		
 		if (obj != null && obj.size() != 0) {
 			gDbModel.eq("_id", id);
-			code = ( gDbModel.dataEx(obj).updateEx() ) ? 0 : 99;
+			code = (gDbModel.dataEx(obj).updateEx()) ? 0 : 99;
 		}
 		return model.resultMessage(code, "修改成功");
 	}
+
 	public String UpdateAllBlock(JSONArray blockArray) {
 		JSONObject obj;
 		String id;
 		if (blockArray != null && blockArray.size() != 0) {
 			for (Object object : blockArray) {
-				obj = (JSONObject)object;
+				obj = (JSONObject) object;
 				id = obj.getString("_id");
 				obj.remove("_id");
 				gDbModel.eq("_id", id).data(obj).update();
@@ -143,6 +146,7 @@ public class Block {
 		}
 		return this.model.resultMessage(0, "修改成功");
 	}
+
 	/**
 	 * 删除区域信息
 	 * 
@@ -156,11 +160,16 @@ public class Block {
 	 */
 	public String DeleteBlock(String ids) {
 		long code = 0;
+		if (ids == null || ids.equals("") || ids.equals("null")) {
+			return rMsg.netMSG(3, "无效区域id");
+		}
 		String[] value = ids.split(",");
 		int l = value.length;
 		gDbModel.or();
 		for (String id : value) {
-			gDbModel.eq("_id", id);
+			if (!id.equals("0")) {
+				gDbModel.eq("_id", id);
+			}
 		}
 		code = gDbModel.deleteAll();
 		return model.resultMessage(code == l ? 0 : 99, "删除成功");
@@ -183,7 +192,7 @@ public class Block {
 		if (bids != null && !bids.equals("")) {
 			String[] value = bids.split(",");
 			for (String bid : value) {
-				if (!bid.equals("")) {
+				if (!bid.equals("") && !bid.equals("0")) {
 					gDbModel.eq("_id", bid);
 				}
 			}
@@ -228,16 +237,17 @@ public class Block {
 			l = array.size();
 			for (int i = 0; i < l; i++) {
 				tempObj = (JSONObject) array.get(i);
-				if (tempObj !=null && tempObj.size()!=0) {
+				if (tempObj != null && tempObj.size() != 0) {
 					id = tempObj.getMongoID("_id");
 					tempObj.remove("mid");
 					tempObj.put("areaid", id);
-			        obj.put(id, tempObj);
+					obj.put(id, tempObj);
 				}
 			}
 		}
 		return obj;
 	}
+
 	/**
 	 * 添加区域信息到模式信息数据中
 	 * 
@@ -251,7 +261,7 @@ public class Block {
 	 *
 	 */
 	@SuppressWarnings("unchecked")
-	public JSONArray Block2Mode(String bid,JSONArray array) {
+	public JSONArray Block2Mode(String bid, JSONArray array) {
 		JSONObject BlockInfo = GetBlockInfo(bid);
 		JSONObject object;
 		if (BlockInfo != null && BlockInfo.size() != 0) {
@@ -275,19 +285,20 @@ public class Block {
 	public JSONObject FillBlock(JSONObject ModeInfo, JSONObject BlockInfo) {
 		JSONObject tempObj = new JSONObject();
 		JSONArray tempArray = new JSONArray();
-		String bid,id;
+		String bid, id;
 		String[] value;
 		if (ModeInfo != null && ModeInfo.size() != 0 && BlockInfo != null && BlockInfo.size() != 0) {
 			bid = ModeInfo.getString("bid");
 			value = bid.split(",");
 			for (String str : value) {
-				if (str!=null && !str.equals("")) {
-					tempObj = (JSONObject)BlockInfo.get(str);
+				if (str != null && !str.equals("")) {
+					tempObj = (JSONObject) BlockInfo.get(str);
 					if ((tempObj != null) && (tempObj.size() != 0)) {
-					tempArray.add(tempObj);
-//						id = ((JSONObject) tempObj.get("_id")).getString("$oid");
-//						ModeInfo.put("area", tempObj.getString("area"));
-//						ModeInfo.put("areaid", id);
+						tempArray.add(tempObj);
+						// id = ((JSONObject)
+						// tempObj.get("_id")).getString("$oid");
+						// ModeInfo.put("area", tempObj.getString("area"));
+						// ModeInfo.put("areaid", id);
 					}
 				}
 			}

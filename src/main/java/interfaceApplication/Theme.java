@@ -1,17 +1,24 @@
 package interfaceApplication;
 
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import org.apache.poi.hpsf.Thumbnail;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
+import JGrapeSystem.rMsg;
+import apps.appsProxy;
 import file.fileHelper;
+import httpClient.request;
 import interfaceModel.GrapeTreeDBModel;
 import model.Model;
+import net.coobird.thumbnailator.Thumbnailator;
+import net.coobird.thumbnailator.Thumbnails;
 import nlogger.nlogger;
 import security.codec;
 import session.session;
@@ -55,6 +62,7 @@ public class Theme {
 		defmap.put("content", ""); // 主题内容，即元素id
 		defmap.put("thumbnail", ""); // 主题缩略图
 		defmap.put("type", 1); // 主题缩略图
+		defmap.put("interval", 10); // 该主题中元素切换的时间间隔。默认间隔时间为10秒
 		return defmap;
 	}
 
@@ -93,12 +101,15 @@ public class Theme {
 	public String AddTheme(String ThemeInfo) {
 		Object info = "";
 		JSONObject obj = model.AddMap(getInitData(), ThemeInfo);
+		if (obj == null || obj.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
+		}
 		gDbModel.checkMode();
 		info = gDbModel.data(obj).insertEx();
-		if (info == null) {
-			return model.resultmsg(1);
-		}
 		obj = Find(info.toString());
+		if (obj == null || obj.size() <= 0) {
+			return rMsg.netMSG(3, "该主题不存在");
+		}
 		return model.resultJSONInfo(obj);
 	}
 
@@ -119,6 +130,12 @@ public class Theme {
 		String thumbnail = "";
 		int code = 99;
 		JSONObject obj = JSONObject.toJSON(ThemeInfo);
+		if (id == null || id.equals("") || id.equals("null")) {
+			return rMsg.netMSG(3, "无效主题id");
+		}
+		if (obj == null || obj.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
+		}
 		if (obj != null && obj.size() != 0) {
 			if (obj.containsKey("thumbnail")) {
 				thumbnail = obj.getString("thumbnail");
@@ -136,6 +153,191 @@ public class Theme {
 	}
 
 	/**
+	 * 修改主题，主题缩略图通过网页url获取截图
+	 * 
+	 * @param id
+	 * @param ThemeInfo
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
+	public String UpdateThemeURL(String id, String ThemeInfo) {
+		String thumbnail = "";
+		int code = 99;
+		JSONObject obj = JSONObject.toJSON(ThemeInfo);
+		JSONObject object = new JSONObject();
+		if (id == null || id.equals("") || id.equals("null")) {
+			return rMsg.netMSG(3, "无效主题id");
+		}
+		if (obj == null || obj.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
+		}
+		if (obj != null && obj.size() != 0) {
+			gDbModel.eq("_id", id);
+			code = (gDbModel.dataEx(obj).updateEx()) ? 0 : 99;
+			if (code==0) {
+				//生成缩略图
+				gDbModel.clear();
+				if (obj.containsKey("thumbnail")) {
+					thumbnail = obj.getString("thumbnail");
+					thumbnail = getWebpageThumbnail(thumbnail);
+					object.put("thumbnail", thumbnail);
+				}else{
+					object.put("thumbnail", "");
+				}
+				if (object!=null && object.size() > 0) {
+					code = (gDbModel.eq("_id", id).data(object).update()!=null) ? 0 : 99;
+				}
+			}
+		}
+		return FindTheme(id);
+	}
+
+	private String getFlePath(String key) {
+		String value = "";
+		JSONObject object = JSONObject.toJSON(appsProxy.configValue().getString("other"));
+		if (object != null && object.size() > 0) {
+			value = object.getString(key);
+		}
+		return value;
+	}
+
+	/**
+	 * 获取网页缩略图
+	 * 
+	 * @param url
+	 * @return
+	 */
+	private String getWebpageThumbnail(String url) {
+		String thumbnail = "";
+		String host = getFlePath("APIHost");
+		String appid = getFlePath("appid");
+		int width = Integer.parseInt(getFlePath("width"));
+		int height = Integer.parseInt(getFlePath("height"));
+		if (url != null && !url.equals("") && !url.equals("null")) {
+			if (width > 0 && height > 0) {
+				String urls = host + "/" + appid + "/GrapeCutImage/ImageOpeation/getNetImage/" + url + "/int:" + width
+						+ "/int:" + height;
+				System.out.println(urls);
+				thumbnail = request.Get(urls);
+				thumbnail = generateImage(thumbnail);
+			}
+		}
+		return thumbnail;
+	}
+
+	private String generateImages(String thumbnail) {
+		String path = "";
+		String ext = "jpg";
+		if (thumbnail != null && !thumbnail.equals("") && !thumbnail.equals("null")) {
+			if (thumbnail.contains("data:image/")) {
+				ext = thumbnail.substring(thumbnail.indexOf("data:image/") + 11, thumbnail.indexOf(";base64,"));
+				thumbnail = thumbnail.substring(thumbnail.lastIndexOf(",") + 1);
+			}
+			path = model.getFilepath();
+			String Date = TimeHelper.stampToDate(TimeHelper.nowMillis()).split(" ")[0];
+			path = path + "\\" + Date + "\\" + TimeHelper.nowSecond() + "." + ext;
+			BASE64Decoder decoder = new BASE64Decoder();
+			try {
+				byte[] bs = decoder.decodeBuffer(thumbnail);
+				for (int i = 0; i < bs.length; i++) {
+					if (bs[i] < 0) {
+						bs[i] += 256;
+					}
+				}
+				OutputStream out = new FileOutputStream(path);
+				out.write(bs);
+				out.flush();
+				out.close();
+			} catch (Exception e) {
+				nlogger.logout(e);
+				path = "";
+			}
+		}
+		return getImgUrl(path);
+	}
+
+	private String generateImage(String thumbnail) {
+		String path = "";
+		String ext = "jpg";
+		thumbnail = codec.DecodeHtmlTag(thumbnail);
+		if (thumbnail != null) {
+			if (thumbnail.contains("data:image/")) {
+				ext = thumbnail.substring(thumbnail.indexOf("data:image/") + 11, thumbnail.indexOf(";base64,"));
+				thumbnail = thumbnail.substring(thumbnail.lastIndexOf(",") + 1);
+			}
+			BASE64Decoder decoder = new BASE64Decoder();
+			try {
+				path = getFlePath("filepath");
+				String Date = TimeHelper.stampToDate(TimeHelper.nowMillis()).split(" ")[0];
+				String dir = path + "\\" + Date;
+				if (!new File(dir).exists()) {
+					new File(dir).mkdir();
+				}
+				path = dir + "\\" + TimeHelper.nowMillis() + "." + ext;
+				byte[] bytes = decoder.decodeBuffer(thumbnail);
+				if (fileHelper.createFile(path)) {
+					OutputStream out = new FileOutputStream(path);
+					out.write(bytes);
+					out.flush();
+					out.close();
+				}
+			} catch (Exception e) {
+				nlogger.logout(e);
+				path = "";
+			}
+		}
+		return getImgUrl(path);
+	}
+
+	/**
+	 * 按比例获取缩略图
+	 * 
+	 * @param image
+	 * @return
+	 */
+	private String getThumbnail(String image) {
+		String outpath = "";
+		outpath = image.substring(0, image.lastIndexOf("."));
+		try {
+			Thumbnails.of(image).scale(Double.parseDouble(model.getThumbnailConfig("ImageScale")))
+					.outputFormat(model.getThumbnailConfig("ImgType"))
+					.outputQuality(Float.parseFloat(model.getThumbnailConfig("ImgQuality"))).toFile("outpath");
+		} catch (Exception e) {
+			nlogger.logout(e);
+			outpath = "";
+		}
+		return (!outpath.equals("")) ? getImgUrl(outpath) : "";
+	}
+
+	/**
+	 * 获取大屏宽度和高度
+	 * 
+	 * @param url
+	 * @return {"width":0,"height":0}
+	 */
+	@SuppressWarnings("unchecked")
+	private JSONObject getScreenWidth(String url) {
+		JSONObject tempObj = null, object = new JSONObject();
+		int width = 400, height = 200;
+		if (url != null && !url.equals("") && !url.equals("null")) {
+			String[] temp = url.split("#");
+			temp = (temp != null && temp.length >= 2) ? temp[1].split("/") : null;
+			sid = (temp != null && temp.length >= 2) ? temp[0] : null;
+			if (sid != null && !sid.equals("") && !sid.equals("null")) {
+				// 获取大屏的宽和高
+				tempObj = new Screen().Find(sid);
+			}
+		}
+		if (tempObj != null && tempObj.size() > 0) {
+			width = Integer.parseInt(tempObj.getString("width"));
+			height = Integer.parseInt(tempObj.getString("height"));
+		}
+		object.put("width", width);
+		object.put("height", height);
+		return object;
+	}
+
+	/**
 	 * 删除主题信息
 	 * 
 	 * @project GrapeScreen
@@ -149,6 +351,11 @@ public class Theme {
 	public String DeleteTheme(String ids) {
 		long tipcode = 99;
 		int l = 0;
+		if (ids == null || ids.equals("") || ids.equals("null")) {
+			if (ids == null || ids.equals("") || ids.equals("null")) {
+				return rMsg.netMSG(3, "无效主题素id");
+			}
+		}
 		if (ids != null && !ids.equals("")) {
 			String[] value = ids.split(",");
 			l = value.length;
@@ -178,18 +385,21 @@ public class Theme {
 		JSONArray array = null;
 		long total = 0, totalSize = 0;
 		JSONArray condArray = JSONArray.toJSONArray(condString);
+		if (idx <= 0 || PageSize <= 0) {
+			return rMsg.netMSG(3, "当前页码小于0或者每页最大量小于0");
+		}
 		if (condArray != null && condArray.size() != 0) {
 			gDbModel.where(condArray);
+		} else {
+			return model.pageShow(new JSONArray(), total, totalSize, idx, PageSize);
 		}
-		// if (sid != null && !sid.equals("")) {
-		if (!model.isAdmin()) {
+		if (sid != null && !sid.equals("")) {
 			gDbModel.eq("userid", userid);
+			array = gDbModel.dirty().mask("itemfatherID,itemSort,deleteable,visable,itemLevel,mMode,uMode,dMode")
+					.page(idx, PageSize);
+			total = gDbModel.dirty().count();
+			totalSize = gDbModel.pageMax(PageSize);
 		}
-		array = gDbModel.dirty().mask("itemfatherID,itemSort,deleteable,visable,itemLevel,mMode,uMode,dMode").page(idx,
-				PageSize);
-		total = gDbModel.dirty().count();
-		totalSize = gDbModel.pageMax(PageSize);
-		// }
 		return model.pageShow(getElement(array), total, totalSize, idx, PageSize);
 	}
 
@@ -236,8 +446,11 @@ public class Theme {
 		Element element = new Element();
 		String eid = "";
 		JSONObject ElementInfo = new JSONObject();
+		if (info == null || info.equals("") || info.equals("null")) {
+			return new JSONObject();
+		}
 		JSONObject obj = gDbModel.eq("_id", info)
-				.mask("itemfatherID,itemSort,deleteable,visable,itemLevel,mMode,uMode,dMode").limit(1).find();
+				.mask("itemfatherID,itemSort,deleteable,visable,itemLevel,mMode,uMode,dMode,timediff").limit(1).find();
 		// 获取元素id
 		if (obj != null && obj.size() != 0) {
 			eid = obj.getString("content");
@@ -354,6 +567,9 @@ public class Theme {
 			ThemeInfo = getThemeInfo(object);
 			// 新增主题信息
 			ThemeInfo = model.AddMap(getInitData(), ThemeInfo.toJSONString());
+			if (ThemeInfo == null || ThemeInfo.size() <= 0) {
+				return rMsg.netMSG(2, "参数异常");
+			}
 			info = gDbModel.data(ThemeInfo).insertOnce();
 		}
 		return getTheme(info.toString());
@@ -389,6 +605,12 @@ public class Theme {
 		JSONArray blockArray = new JSONArray();
 		JSONArray elementArray = new JSONArray();
 		JSONObject object = JSONObject.toJSON(Info);
+		if (tid == null || tid.equals("") || tid.equals("null")) {
+			return rMsg.netMSG(3, "无效主题id");
+		}
+		if (object == null || object.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
+		}
 		if (object != null && object.size() != 0) {
 			eleArray = JSONArray.toJSONArray(object.getString("element"));
 			blockArray = getBlockInfo(object);
@@ -460,49 +682,65 @@ public class Theme {
 	 *
 	 */
 	public String CreateImage(String thumbnail) {
+		String path = CreateImages(thumbnail);
+		return getImgUrl(path);
+	}
+
+	/**
+	 * base64图片写到磁盘
+	 * 
+	 * @param thumbnail
+	 * @return
+	 */
+	public String CreateImages(String thumbnail) {
 		String path = "";
 		String ext = "jpg";
-		thumbnail = codec.DecodeHtmlTag(thumbnail);
-		if (thumbnail != null) { // 图像数据为空
-			if (thumbnail.contains("data:image/")) {
-				ext = thumbnail.substring(thumbnail.indexOf("data:image/") + 11, thumbnail.indexOf(";base64,"));
-				thumbnail = thumbnail.substring(thumbnail.lastIndexOf(",") + 1);
-			}
-			BASE64Decoder decoder = new BASE64Decoder();
-			try {
-				path = model.getFilepath();
-				String Date = TimeHelper.stampToDate(TimeHelper.nowMillis()).split(" ")[0];
-				path = path + "\\" + Date + "\\" + TimeHelper.nowSecond() + "." + ext;
-				byte[] bytes = decoder.decodeBuffer(thumbnail);
-				if (fileHelper.createFile(path)) {
-					OutputStream out = new FileOutputStream(path);
-					out.write(bytes);
-					out.flush();
-					out.close();
+		if (thumbnail != null && !thumbnail.equals("") && !thumbnail.equals("null")) {
+			thumbnail = codec.DecodeHtmlTag(thumbnail);
+			if (thumbnail != null) { // 图像数据为空
+				if (thumbnail.contains("data:image/")) {
+					ext = thumbnail.substring(thumbnail.indexOf("data:image/") + 11, thumbnail.indexOf(";base64,"));
+					thumbnail = thumbnail.substring(thumbnail.lastIndexOf(",") + 1);
 				}
-			} catch (Exception e) {
-				nlogger.logout(e);
-				path = "";
+				BASE64Decoder decoder = new BASE64Decoder();
+				try {
+					path = model.getFilepath();
+					String Date = TimeHelper.stampToDate(TimeHelper.nowMillis()).split(" ")[0];
+					path = path + "\\" + Date + "\\" + TimeHelper.nowSecond() + "." + ext;
+					byte[] bytes = decoder.decodeBuffer(thumbnail);
+					if (fileHelper.createFile(path)) {
+						OutputStream out = new FileOutputStream(path);
+						out.write(bytes);
+						out.flush();
+						out.close();
+					}
+				} catch (Exception e) {
+					nlogger.logout(e);
+					path = "";
+				}
 			}
 		}
-		return getImgUrl(path);
+		return path;
 	}
 
 	private String getImgUrl(String imageURL) {
 		int i = 0;
-		if (imageURL.contains("File//upload")) {
-			i = imageURL.toLowerCase().indexOf("file//upload");
-			imageURL = "\\" + imageURL.substring(i);
+		if (imageURL != null && !imageURL.equals("") && !imageURL.equals("null")) {
+			if (imageURL.contains("File//upload")) {
+				i = imageURL.toLowerCase().indexOf("file//upload");
+				imageURL = "\\" + imageURL.substring(i);
+			}
+			if (imageURL.contains("File\\upload")) {
+				i = imageURL.toLowerCase().indexOf("file\\upload");
+				imageURL = "\\" + imageURL.substring(i);
+			}
+			if (imageURL.contains("File/upload")) {
+				i = imageURL.toLowerCase().indexOf("file/upload");
+				imageURL = "\\" + imageURL.substring(i);
+			}
+			imageURL = model.getFileUrl() + imageURL;
 		}
-		if (imageURL.contains("File\\upload")) {
-			i = imageURL.toLowerCase().indexOf("file\\upload");
-			imageURL = "\\" + imageURL.substring(i);
-		}
-		if (imageURL.contains("File/upload")) {
-			i = imageURL.toLowerCase().indexOf("file/upload");
-			imageURL = "\\" + imageURL.substring(i);
-		}
-		return model.getFileUrl() + imageURL;
+		return imageURL;
 	}
 
 	/**

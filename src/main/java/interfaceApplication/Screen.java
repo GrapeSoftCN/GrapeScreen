@@ -6,6 +6,7 @@ import java.util.Iterator;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
+import JGrapeSystem.rMsg;
 import broadCast.broadCastGroup;
 import check.formHelper;
 import check.formHelper.formdef;
@@ -77,10 +78,10 @@ public class Screen {
 	public String AddScreen(String ScreenInfo) {
 		Object info = null;
 		JSONObject obj = model.AddMap(getInitData(), ScreenInfo);
-		info = gDbModel.data(obj).insertEx();
-		if (info == null) {
-			return model.resultmsg(1);
+		if (obj == null || obj.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
 		}
+		info = gDbModel.data(obj).insertEx();
 		obj = gDbModel.eq("_id", info.toString()).find();
 		return model.resultJSONInfo(obj);
 	}
@@ -95,6 +96,13 @@ public class Screen {
 	public String UpdateScreen(String id, String ScreenInfo) {
 		int code = 99;
 		JSONObject obj = JSONObject.toJSON(ScreenInfo);
+		if (id == null || id.equals("") || id.equals("null")) {
+			return rMsg.netMSG(3, "无效屏幕id");
+		}
+		if (obj == null || obj.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
+		}
+
 		if (obj != null && obj.size() != 0) {
 			gDbModel.eq("_id", id);
 			code = (gDbModel.dataEx(obj).updateEx() ? 0 : 99);
@@ -118,6 +126,9 @@ public class Screen {
 	public String DeleteScreen(String ids) {
 		long tipcode = 99;
 		int l = 0;
+		if (ids == null || ids.equals("") || ids.equals("null")) {
+			return rMsg.netMSG(3, "无效屏幕id");
+		}
 		if (ids != null && !ids.equals("")) {
 			String[] value = ids.split(",");
 			l = value.length;
@@ -150,6 +161,9 @@ public class Screen {
 	public String PageScreen(int idx, int PageSize, String condString) {
 		JSONArray array = null;
 		long total = 0, totalSize = 0;
+		if (idx <= 0 || PageSize <= 0) {
+			return rMsg.netMSG(3, "当前页码小于0或者每页最大量小于0");
+		}
 		if (condString != null && !condString.equals("") && !condString.equals("null")) {
 			JSONArray condArray = JSONArray.toJSONArray(condString);
 			if (condArray != null && condArray.size() != 0) {
@@ -159,10 +173,10 @@ public class Screen {
 			}
 		}
 		if (sid != null && !sid.equals("")) {
-			if (!model.isAdmin()) {
-				gDbModel.eq("userid", userid);
-			}
-			nlogger.logout(gDbModel.condString());
+//			if (!model.isAdmin()) {
+//				gDbModel.eq("userid", userid);
+//			}
+			gDbModel.eq("userid", userid);
 			array = gDbModel.dirty().mask("itemfatherID,itemSort,deleteable,visable,itemLevel,mMode,uMode,dMode,userid")
 					.page(idx, PageSize);
 			total = gDbModel.dirty().count();
@@ -216,6 +230,40 @@ public class Screen {
 	 * @return
 	 */
 	@SuppressWarnings("unchecked")
+	public String ShowFronts(String screenid) {
+		Object area = "";
+		String themeid = "";
+		String modeid = "";
+		Theme theme = new Theme();
+		JSONObject ScreenInfo = null;
+		JSONObject ModeInfo = null;
+		JSONObject ThemeInfo = null;
+		String[] value = screenid.split("\\*");
+		ScreenInfo = Find(value[0]);
+		if (ScreenInfo != null && ScreenInfo.size() != 0) {
+			themeid = ScreenInfo.getString("currenttid");
+		}
+		if (!themeid.equals("")) {
+			ThemeInfo = theme.Find(themeid);
+			if (ThemeInfo != null && ThemeInfo.size() != 0) {
+				modeid = ThemeInfo.getString("mid");
+			}
+		}
+		ModeInfo = Ele2Mode(modeid, themeid);
+		area = (ModeInfo != null) && (ModeInfo.size() != 0) ? ModeInfo.get("area") : "";
+		if ((ScreenInfo != null) && (ScreenInfo.size() != 0)) {
+			ScreenInfo.put("area", area);
+		}
+		return model.resultJSONInfo(ScreenInfo);
+	}
+
+	/**
+	 * 
+	 * 
+	 * @param val
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
 	public String ShowFront(String screenid) {
 		Object area = "";
 		String themeid = "";
@@ -224,9 +272,14 @@ public class Screen {
 		JSONObject ScreenInfo = null;
 		JSONObject ModeInfo = null;
 		JSONObject ThemeInfo = null;
-		ScreenInfo = Find(screenid);
-		if (ScreenInfo != null && ScreenInfo.size() != 0) {
-			themeid = ScreenInfo.getString("currenttid");
+		String[] value = screenid.split("\\*");
+		ScreenInfo = Find(value[0]);
+		if (value != null && value.length >= 2) {
+			themeid = value[1];
+		} else {
+			if (ScreenInfo != null && ScreenInfo.size() != 0) {
+				themeid = ScreenInfo.getString("currenttid");
+			}
 		}
 		if (!themeid.equals("")) {
 			ThemeInfo = theme.Find(themeid);
@@ -268,6 +321,7 @@ public class Screen {
 						contentArray = JSONArray.toJSONArray(eleObj.getString("content"));
 					}
 					areaObj.put("element", contentArray);
+					areaObj.put("timediff", Integer.parseInt(eleObj.getString("timediff")));
 				}
 
 				area.set(i, areaObj);
@@ -305,7 +359,7 @@ public class Screen {
 		return model.resultJSONInfo(Find(info));
 	}
 
-	private JSONObject Find(Object info) {
+	protected JSONObject Find(Object info) {
 		gDbModel.eq("_id", info);
 		JSONObject object = gDbModel.limit(1).find();
 		return object;

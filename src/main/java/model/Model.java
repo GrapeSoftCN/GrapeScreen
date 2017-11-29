@@ -19,6 +19,7 @@ import session.session;
 public class Model {
 	private JSONObject _obj = new JSONObject();
 	private HashMap<String, Object> map = new HashMap<String, Object>();
+
 	/**
 	 * 设置基础字段，所有表都包含的字段
 	 * 
@@ -50,11 +51,11 @@ public class Model {
 		int userType = 0;
 		session se = new session();
 		JSONObject userInfo = se.getDatas();
-		if (userInfo != null && userInfo.size() != 0)  {
+		if (userInfo != null && userInfo.size() != 0) {
 			temp = userInfo.getString("userType");
 		}
-		userType = !temp.equals("")? Integer.parseInt(temp) : 0;
-		return UserMode.root == userType ;
+		userType = !temp.equals("") ? Integer.parseInt(temp) : 0;
+		return UserMode.root == userType;
 	}
 
 	/**
@@ -71,6 +72,7 @@ public class Model {
 		userType = !temp.equals("") ? Integer.parseInt(temp) : 0;
 		return UserMode.root == userType;
 	}
+
 	@SuppressWarnings("unchecked")
 	public JSONObject AddMap(HashMap<String, Object> map, String info) {
 		JSONObject object = JSONObject.toJSON(info);
@@ -87,6 +89,7 @@ public class Model {
 		}
 		return object;
 	}
+
 	public String getFileUrl() {
 		String url = getConfig("file").split("/")[0];
 		return "http://" + url;
@@ -108,7 +111,7 @@ public class Model {
 	 * @return
 	 *
 	 */
-	private String getConfig( String key) {
+	private String getConfig(String key) {
 		String value = "";
 		try {
 			Properties pro = new Properties();
@@ -119,6 +122,7 @@ public class Model {
 		}
 		return value;
 	}
+
 	/**
 	 * 分页数据输出
 	 * 
@@ -182,5 +186,28 @@ public class Model {
 			break;
 		}
 		return jGrapeFW_Message.netMSG(num, msg);
+	}
+
+	/**
+	 * 配置文件中缩略图配置
+	 * 
+	 * @param key
+	 * @return
+	 */
+	private String getConfigs(String key) {
+		String value = "";
+		try {
+			Properties pro = new Properties();
+			pro.load(new FileInputStream("OfficeUrl.properties"));
+			value = pro.getProperty(key);
+		} catch (Exception e) {
+			value = "";
+		}
+		return value;
+	}
+	public String getThumbnailConfig(String key) {
+		String value = "";
+		value = getConfig(key);
+		return value;
 	}
 }

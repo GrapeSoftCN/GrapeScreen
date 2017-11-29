@@ -5,6 +5,7 @@ import java.util.HashMap;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
+import JGrapeSystem.rMsg;
 import check.formHelper;
 import check.tableField;
 import check.formHelper.formdef;
@@ -39,14 +40,14 @@ public class Mode {
 	 * 
 	 * @return
 	 */
-	private GrapeTreeDBModel setCheckData() {
+	/*private GrapeTreeDBModel setCheckData() {
 		formHelper form = new formHelper();
 		tableField field = new tableField("sid", "0");
 		field.putRule(formdef.notNull, "0");
 		form.addField(field);
 		gDbModel.setCheckModel(form);
 		return gDbModel;
-	}
+	}*/
 
 	/**
 	 * 添加默认值
@@ -90,12 +91,11 @@ public class Mode {
 	public String AddMode(String ModeInfo) {
 		Object info;
 		JSONObject obj = model.AddMap(getInitData(), ModeInfo);
-		setCheckData();
+		if (obj == null || obj.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
+		}
 		gDbModel.checkMode();
 		info = gDbModel.data(obj).insertEx();
-		if (info == null) {
-			return model.resultmsg(1);
-		}
 		obj = gDbModel.eq("_id", (info.toString())).limit(1).find();
 		return model.resultJSONInfo(obj);
 	}
@@ -115,6 +115,12 @@ public class Mode {
 	public String UpdateMode(String id, String ScreenInfo) {
 		int code = 99;
 		JSONObject obj = JSONObject.toJSON(ScreenInfo);
+		if (id == null || id.equals("") || id.equals("null")) {
+			return rMsg.netMSG(3, "无效模式id");
+		}
+		if (obj == null || obj.size() <= 0) {
+			return rMsg.netMSG(2, "参数异常");
+		}
 		if (obj != null && obj.size() != 0) {
 			gDbModel.eq("_id", id);
 			code = (gDbModel.dataEx(obj).updateEx()) ? 0 : 99;
@@ -138,6 +144,9 @@ public class Mode {
 		JSONArray BlockInfo = new JSONArray();
 		long tipcode = 99;
 		int l = 0;
+		if (ids == null || ids.equals("") || ids.equals("null")) {
+			return rMsg.netMSG(3, "无效模式id");
+		}
 		if (ids != null && !ids.equals("")) {
 			String[] value = ids.split(",");
 			l = value.length;
@@ -145,9 +154,9 @@ public class Mode {
 			for (String id : value) {
 				gDbModel.eq("_id", id);
 			}
-			BlockInfo = gDbModel.select();
+			BlockInfo = gDbModel.dirty().select();
 			bid = getBid(BlockInfo);
-			if (bid != null && bid.equals("")) {
+			if (bid != null && !bid.equals("")) {
 				block.DeleteBlock(bid);
 			}
 			tipcode = gDbModel.deleteAll();
@@ -172,6 +181,9 @@ public class Mode {
 		JSONArray array = null;
 		JSONArray condArray;
 		long total = 0, totalSize = 0;
+		if (idx <= 0 || PageSize <= 0) {
+			return rMsg.netMSG(3, "当前页码小于0或者每页最大量小于0");
+		}
 		if (condString != null && !condString.equals("") && !condString.equals("null")) {
 			condArray = JSONArray.toJSONArray(condString);
 			if (condArray != null && condArray.size() != 0) {
@@ -180,10 +192,12 @@ public class Mode {
 				return model.pageShow(null, total, totalSize, idx, PageSize);
 			}
 		}
-		array = gDbModel.dirty().mask("itemfatherID,itemSort,deleteable,visable,itemLevel,mMode,uMode,dMode,userid")
-				.page(idx, PageSize);
-		total = gDbModel.dirty().count();
-		totalSize = gDbModel.pageMax(PageSize);
+		if (sid != null && !sid.equals("")) {
+			array = gDbModel.dirty().mask("itemfatherID,itemSort,deleteable,visable,itemLevel,mMode,uMode,dMode,userid")
+					.page(idx, PageSize);
+			total = gDbModel.dirty().count();
+			totalSize = gDbModel.pageMax(PageSize);
+		}
 		return model.pageShow(getBlock(array), total, totalSize, idx, PageSize);
 	}
 
