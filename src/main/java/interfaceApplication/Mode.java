@@ -1,20 +1,18 @@
 package interfaceApplication;
 
-import java.util.HashMap;
-
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
 import JGrapeSystem.rMsg;
-import check.formHelper;
-import check.tableField;
-import check.formHelper.formdef;
+import apps.appsProxy;
+import interfaceModel.GrapeDBSpecField;
 import interfaceModel.GrapeTreeDBModel;
 import model.Model;
 import session.session;
 import string.StringHelper;
 
 public class Mode {
+	private GrapeDBSpecField gdbField;
 	private GrapeTreeDBModel gDbModel;
 	private Model model;
 	private session se;
@@ -24,43 +22,19 @@ public class Mode {
 	private Block block = new Block();
 
 	public Mode() {
-		model = new Model();
 		gDbModel = new GrapeTreeDBModel();
-		gDbModel.form("mode").bindApp();
+		gdbField = new GrapeDBSpecField();
+        gdbField.importDescription(appsProxy.tableConfig("Mode"));
+        gDbModel.descriptionModel(gdbField);
+        gDbModel.bindApp();
+		
+		model = new Model();
 		se = new session();
 		userInfo = se.getDatas();
 		if (userInfo != null && userInfo.size() != 0) {
 			userid = userInfo.getMongoID("_id");
 		}
 		sid = session.getSID();
-	}
-
-	/**
-	 * 设置验证内容
-	 * 
-	 * @return
-	 */
-	/*private GrapeTreeDBModel setCheckData() {
-		formHelper form = new formHelper();
-		tableField field = new tableField("sid", "0");
-		field.putRule(formdef.notNull, "0");
-		form.addField(field);
-		gDbModel.setCheckModel(form);
-		return gDbModel;
-	}*/
-
-	/**
-	 * 添加默认值
-	 * 
-	 * @return
-	 */
-	private HashMap<String, Object> getInitData() {
-		HashMap<String, Object> defmap = model.AddFixField();
-		// 设置mode表独有的字段
-		defmap.put("userid", userid); // 所属用户id
-		defmap.put("name", ""); // 模式名称
-		defmap.put("bid", "0"); // 模式名称
-		return defmap;
 	}
 
 	/**
@@ -88,14 +62,16 @@ public class Mode {
 	 * @return
 	 *
 	 */
+	@SuppressWarnings("unchecked")
 	public String AddMode(String ModeInfo) {
 		Object info;
-		JSONObject obj = model.AddMap(getInitData(), ModeInfo);
+//		JSONObject obj = model.AddMap(getInitData(), ModeInfo);
+		JSONObject obj = JSONObject.toJSON(ModeInfo);
+		obj.put("userid", userid);
 		if (obj == null || obj.size() <= 0) {
 			return rMsg.netMSG(2, "参数异常");
 		}
-		gDbModel.checkMode();
-		info = gDbModel.data(obj).insertEx();
+		info = gDbModel.data(obj).autoComplete().insertOnce();
 		obj = gDbModel.eq("_id", (info.toString())).limit(1).find();
 		return model.resultJSONInfo(obj);
 	}
@@ -355,7 +331,7 @@ public class Mode {
 		JSONObject tempObj = new JSONObject(), ScreenObj;
 		if (object != null && object.size() != 0) {
 			sid = object.getString("sid");
-			mid = ((JSONObject) object.get("_id")).getString("$oid");
+			mid = object.getString("_id");
 			// 获取大屏信息
 			ScreenObj = screen.getScreenInfo(sid);
 			if (ScreenObj != null && ScreenObj.size() != 0) {

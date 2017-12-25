@@ -1,20 +1,21 @@
 package interfaceApplication;
 
-import java.util.HashMap;
-
 import org.bson.types.ObjectId;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
 import JGrapeSystem.rMsg;
+import apps.appsProxy;
+import check.checkHelper;
+import interfaceModel.GrapeDBSpecField;
 import interfaceModel.GrapeTreeDBModel;
 import model.Model;
-import nlogger.nlogger;
 import security.codec;
 import session.session;
 import string.StringHelper;
 
 public class Element {
+	private GrapeDBSpecField gdbField;
 	private GrapeTreeDBModel gDbModel;
 	private Model model;
 	private session se;
@@ -24,7 +25,11 @@ public class Element {
 
 	public Element() {
 		gDbModel = new GrapeTreeDBModel();
-		gDbModel.form("element").bindApp();
+		gdbField = new GrapeDBSpecField();
+        gdbField.importDescription(appsProxy.tableConfig("Element"));
+        gDbModel.descriptionModel(gdbField);
+        gDbModel.bindApp();
+
 		model = new Model();
 		se = new session();
 		userInfo = se.getDatas();
@@ -32,19 +37,6 @@ public class Element {
 			userid = userInfo.getMongoID("_id");
 		}
 		sid = session.getSID();
-	}
-
-	/**
-	 * 添加默认值
-	 * 
-	 * @return
-	 */
-	private HashMap<String, Object> getInitData() {
-		HashMap<String, Object> defmap = model.AddFixField();
-		defmap.put("bid", "0"); // 所属用户id
-		defmap.put("content", ""); // 元素内容，jsonarray形式，[{"type":"","content":""}]
-		defmap.put("timediff", "5"); // 元素切换间隔
-		return defmap;
 	}
 
 	/**
@@ -62,7 +54,8 @@ public class Element {
 	public String AddElement(String ElementInfo) {
 		Object info = "";
 		String content;
-		JSONObject obj = model.AddMap(getInitData(), ElementInfo);
+//		JSONObject obj = model.AddMap(getInitData(), ElementInfo);
+		JSONObject obj = JSONObject.toJSON(ElementInfo);
 		if (obj == null || obj.size() <= 0) {
 			return rMsg.netMSG(2, "参数异常");
 		}
@@ -75,8 +68,7 @@ public class Element {
 			content = codec.decodebase64(content);
 			obj.put("content", content);
 		}
-		gDbModel.checkMode();
-		info = gDbModel.data(obj).insertEx();
+		info = gDbModel.data(obj).autoComplete().insertOnce();
 		if (info == null) {
 			return model.resultmsg(1);
 		}
@@ -267,7 +259,7 @@ public class Element {
 	public JSONObject GetElementInfo(String ids) {
 		JSONObject tempObj, obj = new JSONObject();
 		String id, temp="5";
-		int l = 0,timediff = 5;
+		int l = 0;
 		JSONArray array = BatchElement(ids);
 		JSONArray contentobj = new JSONArray();
 		array = getBlocks(array);
@@ -283,14 +275,14 @@ public class Element {
 				object.put("area", tempObj.getString("area"));
 				object.put("areaid", tempObj.getString("areaid"));
 				object.put("bid", tempObj.getString("bid"));
-				object.put("_id", tempObj.getJson("_id"));
+				object.put("_id", tempObj.getString("_id"));
 				if (object.containsKey("timediff")) {
 					temp = tempObj.getString("timediff");
 					if (temp.contains("$numberLong")) {
 						temp = JSONObject.toJSON(temp).getString("$numberLong");
 					}
-					if (temp!=null && !temp.equals("") && !temp.equals("")) {
-						timediff = Integer.parseInt(temp);
+					if (!StringHelper.InvaildString(temp)) {
+						temp = "5";
 					}
 				}
 				object.put("timediff", Integer.parseInt(temp));
@@ -378,8 +370,7 @@ public class Element {
 			for (String str : value) {
 				JSONObject tempObj = (JSONObject) BlockInfo.get(str);
 				if ((tempObj != null) && (tempObj.size() != 0)) {
-					// tempArray.add(tempObj);
-					id = ((JSONObject) tempObj.get("_id")).getString("$oid");
+					id = tempObj.getString("_id");
 					area = tempObj.getString("area");
 					areaid = id;
 				}
@@ -431,7 +422,11 @@ public class Element {
 			String[] value = ids.split(",");
 			if (value.length > 0) {
 				for (String id : value) {
-					gDbModel.eq("_id", id);
+					if (StringHelper.InvaildString(id)) {
+						if (ObjectId.isValid(id) || checkHelper.isInt(id)) {
+							gDbModel.eq("_id", id);
+						}
+					}
 				}
 				array = gDbModel.field("_id,bid,content,timediff").select();
 				// array =
@@ -453,7 +448,7 @@ public class Element {
 	 *
 	 */
 	public JSONObject Find(String info) {
-		JSONObject obj = gDbModel.eq("_id", info).field("_id,content,bid").limit(1).find();
+		JSONObject obj = gDbModel.eq("_id", info).field("_id,content,bid,timediff").limit(1).find();
 		return obj;
 	}
 

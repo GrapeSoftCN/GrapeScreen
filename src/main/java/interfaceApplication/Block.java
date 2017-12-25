@@ -1,54 +1,31 @@
 package interfaceApplication;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
 import JGrapeSystem.rMsg;
-import check.formHelper;
-import check.tableField;
-import check.formHelper.formdef;
+import apps.appsProxy;
+import interfaceModel.GrapeDBSpecField;
 import interfaceModel.GrapeTreeDBModel;
 import model.Model;
 import string.StringHelper;
 
 public class Block {
 	private Model model;
+	private GrapeDBSpecField gdbField;
 	private GrapeTreeDBModel gDbModel;
 
 	public Block() {
 		model = new Model();
+		
 		gDbModel = new GrapeTreeDBModel();
-		gDbModel.form("block").bindApp();
-	}
-
-	/**
-	 * 设置验证内容
-	 * 
-	 * @return
-	 */
-	/*
-	 * private GrapeTreeDBModel setCheckData() { formHelper form = new
-	 * formHelper(); tableField field = new tableField("area", "");
-	 * field.putRule(formdef.notNull, ""); form.addField(field); field = new
-	 * tableField("mid", "1"); field.putRule(formdef.notNull, "100");
-	 * form.addField(field); gDbModel.setCheckModel(form); return gDbModel; }
-	 */
-
-	/**
-	 * 添加默认值
-	 * 
-	 * @return
-	 */
-	private HashMap<String, Object> getInitData() {
-		HashMap<String, Object> defmap = model.AddFixField();
-		// 设置block表独有的字段
-		// defmap.put("mid", "0"); // 所属模式
-		// defmap.put("area", "1"); // 屏幕区域
-		return defmap;
+		gdbField = new GrapeDBSpecField();
+        gdbField.importDescription(appsProxy.tableConfig("Block"));
+        gDbModel.descriptionModel(gdbField);
+        gDbModel.bindApp();
 	}
 
 	/**
@@ -64,11 +41,12 @@ public class Block {
 	 */
 	public String AddBlock(String BlockInfo) {
 		Object info = "";
-		JSONObject object = model.AddMap(getInitData(), BlockInfo);
+		JSONObject object = JSONObject.toJSON(BlockInfo);
+//		JSONObject object = model.AddMap(getInitData(), BlockInfo);
 		if (object == null || object.size() <= 0) {
 			return rMsg.netMSG(2, "参数异常");
 		}
-		info = gDbModel.dataEx(object).insertEx();
+		info = gDbModel.dataEx(object).autoComplete().insertOnce();
 		object = gDbModel.eq("_id", info).find();
 		return model.resultJSONInfo(object);
 	}
@@ -285,7 +263,7 @@ public class Block {
 	public JSONObject FillBlock(JSONObject ModeInfo, JSONObject BlockInfo) {
 		JSONObject tempObj = new JSONObject();
 		JSONArray tempArray = new JSONArray();
-		String bid, id;
+		String bid;
 		String[] value;
 		if (ModeInfo != null && ModeInfo.size() != 0 && BlockInfo != null && BlockInfo.size() != 0) {
 			bid = ModeInfo.getString("bid");
@@ -295,10 +273,6 @@ public class Block {
 					tempObj = (JSONObject) BlockInfo.get(str);
 					if ((tempObj != null) && (tempObj.size() != 0)) {
 						tempArray.add(tempObj);
-						// id = ((JSONObject)
-						// tempObj.get("_id")).getString("$oid");
-						// ModeInfo.put("area", tempObj.getString("area"));
-						// ModeInfo.put("areaid", id);
 					}
 				}
 			}

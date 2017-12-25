@@ -7,11 +7,13 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
 import JGrapeSystem.rMsg;
+import apps.appsProxy;
 import broadCast.broadCastGroup;
 import check.formHelper;
 import check.formHelper.formdef;
 import check.tableField;
 import httpServer.grapeHttpUnit;
+import interfaceModel.GrapeDBSpecField;
 import interfaceModel.GrapeTreeDBModel;
 import io.netty.channel.Channel;
 import model.Model;
@@ -21,6 +23,7 @@ import session.session;
 
 public class Screen {
 	private GrapeTreeDBModel gDbModel;
+	private GrapeDBSpecField gdbField;
 	private Model model;
 	private session se;
 	private JSONObject userInfo = new JSONObject();
@@ -28,33 +31,19 @@ public class Screen {
 	private String sid = null;
 
 	public Screen() {
-		model = new Model();
 		gDbModel = new GrapeTreeDBModel();
-		gDbModel.form("screen").bindApp();
+		gdbField = new GrapeDBSpecField();
+        gdbField.importDescription(appsProxy.tableConfig("Screen"));
+        gDbModel.descriptionModel(gdbField);
+        gDbModel.bindApp();
+		
+		model = new Model();
 		se = new session();
 		userInfo = se.getDatas();
 		if (userInfo != null && userInfo.size() != 0) {
 			userid = userInfo.getMongoID("_id");
 		}
 		sid = session.getSID();
-	}
-
-	/**
-	 * 添加默认值
-	 * 
-	 * @return
-	 */
-	private HashMap<String, Object> getInitData() {
-		HashMap<String, Object> defmap = model.AddFixField();
-		// 设置screen表独有的字段
-		defmap.put("userid", userid); // 所属用户id
-		defmap.put("width", 100); // 大屏宽度
-		defmap.put("height", 100); // 大屏长度
-		defmap.put("col", 1); // 横向屏幕网格数
-		defmap.put("row", 1); // 纵向屏幕网格数
-		defmap.put("name", ""); // 大屏名称
-		defmap.put("currenttid", ""); // 当前主题id
-		return defmap;
 	}
 
 	public String SetTheme(String screenid, String themeId) {
@@ -75,13 +64,16 @@ public class Screen {
 	 * @param ScreenInfo
 	 * @return
 	 */
+	@SuppressWarnings("unchecked")
 	public String AddScreen(String ScreenInfo) {
 		Object info = null;
-		JSONObject obj = model.AddMap(getInitData(), ScreenInfo);
+//		JSONObject obj = model.AddMap(getInitData(), ScreenInfo);
+		JSONObject obj = JSONObject.toJSON(ScreenInfo);
+		obj.put("userid", userid);
 		if (obj == null || obj.size() <= 0) {
 			return rMsg.netMSG(2, "参数异常");
 		}
-		info = gDbModel.data(obj).insertEx();
+		info = gDbModel.data(obj).autoComplete().insertOnce();
 		obj = gDbModel.eq("_id", info.toString()).find();
 		return model.resultJSONInfo(obj);
 	}

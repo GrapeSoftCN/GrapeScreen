@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-import org.apache.poi.hpsf.Thumbnail;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
@@ -15,9 +14,9 @@ import JGrapeSystem.rMsg;
 import apps.appsProxy;
 import file.fileHelper;
 import httpClient.request;
+import interfaceModel.GrapeDBSpecField;
 import interfaceModel.GrapeTreeDBModel;
 import model.Model;
-import net.coobird.thumbnailator.Thumbnailator;
 import net.coobird.thumbnailator.Thumbnails;
 import nlogger.nlogger;
 import security.codec;
@@ -26,9 +25,9 @@ import string.StringHelper;
 import sun.misc.BASE64Decoder;
 import time.TimeHelper;
 
-@SuppressWarnings("restriction")
 public class Theme {
 	private GrapeTreeDBModel gDbModel;
+	private GrapeDBSpecField gdbField;
 	private Model model;
 	private session se;
 	private JSONObject userInfo = new JSONObject();
@@ -38,7 +37,11 @@ public class Theme {
 
 	public Theme() {
 		gDbModel = new GrapeTreeDBModel();
-		gDbModel.form("theme").bindApp();
+		gdbField = new GrapeDBSpecField();
+		gdbField.importDescription(appsProxy.tableConfig("Theme"));
+		gDbModel.descriptionModel(gdbField);
+		gDbModel.bindApp();
+
 		model = new Model();
 		se = new session();
 		userInfo = se.getDatas();
@@ -46,24 +49,6 @@ public class Theme {
 			userid = userInfo.getMongoID("_id");
 		}
 		sid = session.getSID();
-	}
-
-	/**
-	 * 添加默认值
-	 * 
-	 * @return
-	 */
-	private HashMap<String, Object> getInitData() {
-		HashMap<String, Object> defmap = model.AddFixField();
-		// 设置screen表独有的字段
-		defmap.put("userid", userid); // 所属用户id
-		defmap.put("name", ""); // 主题名称
-		defmap.put("mid", ""); // 主题所属模式id
-		defmap.put("content", ""); // 主题内容，即元素id
-		defmap.put("thumbnail", ""); // 主题缩略图
-		defmap.put("type", 1); // 主题缩略图
-		defmap.put("interval", 10); // 该主题中元素切换的时间间隔。默认间隔时间为10秒
-		return defmap;
 	}
 
 	/**
@@ -100,12 +85,13 @@ public class Theme {
 	 */
 	public String AddTheme(String ThemeInfo) {
 		Object info = "";
-		JSONObject obj = model.AddMap(getInitData(), ThemeInfo);
+		JSONObject obj = JSONObject.toJSON(ThemeInfo);
 		if (obj == null || obj.size() <= 0) {
 			return rMsg.netMSG(2, "参数异常");
 		}
 		gDbModel.checkMode();
-		info = gDbModel.data(obj).insertEx();
+		obj.put("userid", userid);
+		info = gDbModel.data(obj).autoComplete().insertOnce();
 		obj = Find(info.toString());
 		if (obj == null || obj.size() <= 0) {
 			return rMsg.netMSG(3, "该主题不存在");
@@ -174,18 +160,18 @@ public class Theme {
 		if (obj != null && obj.size() != 0) {
 			gDbModel.eq("_id", id);
 			code = (gDbModel.dataEx(obj).updateEx()) ? 0 : 99;
-			if (code==0) {
-				//生成缩略图
+			if (code == 0) {
+				// 生成缩略图
 				gDbModel.clear();
 				if (obj.containsKey("thumbnail")) {
 					thumbnail = obj.getString("thumbnail");
 					thumbnail = getWebpageThumbnail(thumbnail);
 					object.put("thumbnail", thumbnail);
-				}else{
+				} else {
 					object.put("thumbnail", "");
 				}
-				if (object!=null && object.size() > 0) {
-					code = (gDbModel.eq("_id", id).data(object).update()!=null) ? 0 : 99;
+				if (object != null && object.size() > 0) {
+					code = (gDbModel.eq("_id", id).data(object).update() != null) ? 0 : 99;
 				}
 			}
 		}
@@ -215,16 +201,21 @@ public class Theme {
 		int height = Integer.parseInt(getFlePath("height"));
 		if (url != null && !url.equals("") && !url.equals("null")) {
 			if (width > 0 && height > 0) {
-				String urls = host + "/" + appid + "/GrapeCutImage/ImageOpeation/getNetImage/" + url + "/int:" + width
-						+ "/int:" + height;
-				System.out.println(urls);
-				thumbnail = request.Get(urls);
+				// String urls = host + "/" + appid +
+				// "/GrapeCutImage/ImageOpeation/getNetImage/" + url + "/int:" +
+				// width
+				// + "/int:" + height;
+				// System.out.println(urls);
+				// thumbnail = request.Get(urls);
+				thumbnail = (String) appsProxy.proxyCall(
+						"/GrapeCutImage/ImageOpeation/getNetImage/" + url + "/int:" + width + "/int:" + height);
 				thumbnail = generateImage(thumbnail);
 			}
 		}
 		return thumbnail;
 	}
 
+	@SuppressWarnings({ "unused", "restriction" })
 	private String generateImages(String thumbnail) {
 		String path = "";
 		String ext = "jpg";
@@ -256,6 +247,7 @@ public class Theme {
 		return getImgUrl(path);
 	}
 
+	@SuppressWarnings("restriction")
 	private String generateImage(String thumbnail) {
 		String path = "";
 		String ext = "jpg";
@@ -295,6 +287,7 @@ public class Theme {
 	 * @param image
 	 * @return
 	 */
+	@SuppressWarnings("unused")
 	private String getThumbnail(String image) {
 		String outpath = "";
 		outpath = image.substring(0, image.lastIndexOf("."));
@@ -315,7 +308,7 @@ public class Theme {
 	 * @param url
 	 * @return {"width":0,"height":0}
 	 */
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({ "unchecked", "unused" })
 	private JSONObject getScreenWidth(String url) {
 		JSONObject tempObj = null, object = new JSONObject();
 		int width = 400, height = 200;
@@ -353,7 +346,7 @@ public class Theme {
 		int l = 0;
 		if (ids == null || ids.equals("") || ids.equals("null")) {
 			if (ids == null || ids.equals("") || ids.equals("null")) {
-				return rMsg.netMSG(3, "无效主题素id");
+				return rMsg.netMSG(3, "无效主题id");
 			}
 		}
 		if (ids != null && !ids.equals("")) {
@@ -566,11 +559,12 @@ public class Theme {
 			// 获取主题信息
 			ThemeInfo = getThemeInfo(object);
 			// 新增主题信息
-			ThemeInfo = model.AddMap(getInitData(), ThemeInfo.toJSONString());
+			// ThemeInfo = model.AddMap(getInitData(),
+			// ThemeInfo.toJSONString());
 			if (ThemeInfo == null || ThemeInfo.size() <= 0) {
 				return rMsg.netMSG(2, "参数异常");
 			}
-			info = gDbModel.data(ThemeInfo).insertOnce();
+			info = gDbModel.data(ThemeInfo).autoComplete().insertOnce();
 		}
 		return getTheme(info.toString());
 	}
@@ -659,7 +653,7 @@ public class Theme {
 		ThemeInfo.put("type", Long.parseLong(type));
 		for (Object object2 : eleArray) {
 			tempobj = (JSONObject) object2;
-			tempid = ((JSONObject) tempobj.get("_id")).getString("$oid");
+			tempid = tempobj.getString("_id");
 			if (!tempid.equals("")) {
 				eid += tempid + ",";
 			}
@@ -692,6 +686,7 @@ public class Theme {
 	 * @param thumbnail
 	 * @return
 	 */
+	@SuppressWarnings("restriction")
 	public String CreateImages(String thumbnail) {
 		String path = "";
 		String ext = "jpg";
@@ -759,19 +754,17 @@ public class Theme {
 	private JSONArray getElementInfo() {
 		JSONArray array = new JSONArray();
 		JSONArray ElementArray = new JSONArray();
-		JSONObject tempobj, temp;
+		JSONObject tempobj;
 		String eid, _id, content;
 		if (eleArray != null && eleArray.size() != 0) {
 			int l = eleArray.size();
 			for (int i = 0; i < l; i++) {
-				temp = new JSONObject();
 				JSONObject ElementInfo = new JSONObject();
 				tempobj = (JSONObject) eleArray.get(i);
 				_id = tempobj.getString("_id");
 				if (_id.equals("")) {
 					eid = AddElement(tempobj);
-					temp.put("$oid", eid);
-					tempobj.put("_id", temp);
+					tempobj.put("_id", eid);
 					content = tempobj.getString("content");
 					if (!content.equals("")) {
 						content = codec.DecodeHtmlTag(content);
@@ -779,7 +772,7 @@ public class Theme {
 					}
 					tempobj.put("content", content);
 				} else {
-					eid = ((JSONObject) tempobj.get("_id")).getString("$oid");
+					eid = tempobj.getString("_id");
 				}
 				ElementInfo.put("bid", tempobj.getString("areaid"));
 				ElementInfo.put("content", tempobj.getString("content"));
@@ -894,7 +887,7 @@ public class Theme {
 			for (int i = 0; i < l; i++) {
 				object = (JSONObject) array.get(i);
 				tempId = object.getString("content");
-				if (tempId != null && !tempId.equals("")) {
+				if (StringHelper.InvaildString(tempId)) {
 					eid += tempId + ",";
 				}
 			}
