@@ -10,11 +10,11 @@ import java.util.Properties;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
-import JGrapeSystem.jGrapeFW_Message;
-import authority.plvDef.UserMode;
-import authority.plvDef.plvType;
-import nlogger.nlogger;
-import session.session;
+import common.java.JGrapeSystem.jGrapeFW_Message;
+import common.java.authority.plvDef.UserMode;
+import common.java.authority.plvDef.plvType;
+import common.java.session.session;
+
 
 public class Model {
 	private JSONObject _obj = new JSONObject();

@@ -4,15 +4,14 @@ import org.bson.types.ObjectId;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
-import JGrapeSystem.rMsg;
-import apps.appsProxy;
-import check.checkHelper;
-import interfaceModel.GrapeDBSpecField;
-import interfaceModel.GrapeTreeDBModel;
 import model.Model;
-import security.codec;
-import session.session;
-import string.StringHelper;
+import common.java.JGrapeSystem.rMsg;
+import common.java.apps.appsProxy;
+import common.java.interfaceModel.GrapeDBSpecField;
+import common.java.interfaceModel.GrapeTreeDBModel;
+import common.java.security.codec;
+import common.java.session.session;
+import common.java.string.StringHelper;
 
 public class Element {
 	private GrapeDBSpecField gdbField;
@@ -423,7 +422,7 @@ public class Element {
 			if (value.length > 0) {
 				for (String id : value) {
 					if (StringHelper.InvaildString(id)) {
-						if (ObjectId.isValid(id) || checkHelper.isInt(id)) {
+						if (ObjectId.isValid(id)) {
 							gDbModel.eq("_id", id);
 						}
 					}
